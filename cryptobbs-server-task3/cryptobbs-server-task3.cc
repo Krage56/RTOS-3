@@ -79,69 +79,71 @@ int io_devctl(resmgr_context_t *ctp, io_devctl_t *msg,
     bbs::BBSParams* tmp_params;
 
     int32_t client_id = ctp->info.scoid;
-
-    const std::lock_guard<std::mutex> lock_g(mut);
-    std::cout << "Mutex is owned by thread " << gettid() << std::endl;
-    switch (msg->i.dcmd)
     {
-    case SET_PARAMS:
-    {
-    	tmp_params = reinterpret_cast<bbs::BBSParams*>(_DEVCTL_DATA(msg->i));
+		const std::lock_guard<std::mutex> lock_g(mut);
+		std::cout << "Mutex is owned by thread " << gettid() << std::endl;
+		switch (msg->i.dcmd)
+		{
+		case SET_PARAMS:
+		{
+			tmp_params = reinterpret_cast<bbs::BBSParams*>(_DEVCTL_DATA(msg->i));
 
-    	//validation
-    	if (!(tmp_params->p % 4 == 3 && tmp_params->q % 4 == 3))
-    	{
-    		fprintf(stderr,
-    		        "%d %d: Invalid numbers.\n",
-    		        tmp_params->p, tmp_params->q);
-    	}
-    	else
-    	{
-//    		const std::lock_guard<std::mutex> lock_g(mut);
-    		contexts[client_id].client_settings = *tmp_params;
-    		contexts[client_id].last_x = tmp_params->seed;
-    	}
-    	nbytes = 0;
-        break;
-    }
-    case GET_DATA:
-    {
-//		const std::lock_guard<std::mutex> lock_g(mut);
-    	*(reinterpret_cast<uint32_t*>(_DEVCTL_DATA(msg->i))) = BBS(contexts[client_id]);
-    	nbytes = sizeof(uint32_t);
-    	break;
-    }
-    default:
-    {
-        return(ENOSYS);
-    }
-    }
+			//validation
+			if (!(tmp_params->p % 4 == 3 && tmp_params->q % 4 == 3))
+			{
+				fprintf(stderr,
+						"%d %d: Invalid numbers.\n",
+						tmp_params->p, tmp_params->q);
+			}
+			else
+			{
+				contexts[client_id].client_settings = *tmp_params;
+				contexts[client_id].last_x = tmp_params->seed;
+			}
+			nbytes = 0;
+			break;
+		}
+		case GET_DATA:
+		{
+			*(reinterpret_cast<uint32_t*>(_DEVCTL_DATA(msg->i))) = BBS(contexts[client_id]);
+			nbytes = sizeof(uint32_t);
+			break;
+		}
+		default:
+		{
+			return(ENOSYS);
+		}
+		}
 
-    memset(&msg->o, 0, sizeof(msg->o));
-    /* Indicate the number of bytes and return the message */
-    msg->o.nbytes = nbytes;
-
+		memset(&msg->o, 0, sizeof(msg->o));
+		/* Indicate the number of bytes and return the message */
+		msg->o.nbytes = nbytes;
+	}
     std::cout << "Mutex is freed by thread " << gettid() << std::endl;
     return(_RESMGR_PTR(ctp, &msg->o, sizeof(msg->o) + nbytes));
 }
 
 int io_open (resmgr_context_t * ctp , io_open_t * msg , RESMGR_HANDLE_T * handle , void * extra )
 {
-	const std::lock_guard<std::mutex> lock_g(mut);
-	std::cout << "Mutex is owned by thread " << gettid() << std::endl;
-	contexts.emplace(ctp->info.scoid, ClientContext());
+	{
+		const std::lock_guard<std::mutex> lock_g(mut);
+		std::cout << "Mutex is owned by thread " << gettid() << std::endl;
+		contexts.emplace(ctp->info.scoid, ClientContext());
 
-	std::cout << "CLIENT:\t" << ctp->info.scoid << "\tCONNECTED" << std::endl;
+		std::cout << "CLIENT:\t" << ctp->info.scoid << "\tCONNECTED" << std::endl;
+	}
 	std::cout << "Mutex is freed by thread " << gettid() << std::endl;
 	return (iofunc_open_default (ctp, msg, handle, extra));
 }
 
 int io_close(resmgr_context_t *ctp, io_close_t *msg, iofunc_ocb_t *ocb)
 {
-	const std::lock_guard<std::mutex> lock_g(mut);
-	std::cout << "Mutex is owned by thread " << gettid() << std::endl;
-	contexts.erase(ctp->info.scoid);
-	std::cout << "CLIENT:\t" << ctp->info.scoid << "\tCLOSE" << std::endl;
+	{
+		const std::lock_guard<std::mutex> lock_g(mut);
+		std::cout << "Mutex is owned by thread " << gettid() << std::endl;
+		contexts.erase(ctp->info.scoid);
+		std::cout << "CLIENT:\t" << ctp->info.scoid << "\tCLOSE" << std::endl;
+	}
 	std::cout << "Mutex is freed by thread " << gettid() << std::endl;
 	return (iofunc_close_dup_default(ctp, msg, ocb));
 }
