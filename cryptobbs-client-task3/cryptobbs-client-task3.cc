@@ -42,7 +42,6 @@ int main( int argc, char **argv )
 	//set handler for CTRL+C
 	signal(SIGINT, signalHandler);
 	//set handler for sigterm
-//	signal(SIGTERM, signalHandler);
     // open a connection to the server (fd == coid)
     int fd = open("/dev/sample", O_RDWR);
     if(fd < 0)

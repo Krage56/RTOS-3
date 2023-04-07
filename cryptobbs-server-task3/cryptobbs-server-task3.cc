@@ -7,6 +7,7 @@
 #include <iostream>
 #include <utility>
 #include <unordered_map>
+#include <memory>
 #include "bbc.h"
 
 /*
@@ -29,27 +30,29 @@ struct ClientContext
 	bbs::BBSParams client_settings;
 	//x_n := x_{n-1}^2 mod M
 	uint32_t last_x;
+	pid_t tid;
 	ClientContext():
 		client_settings(bbs::BBSParams()),
-		last_x(0)
+		last_x(0),
+		tid(0)
 	{std::cout << "Client constructed" << std::endl;}
-	~ClientContext(){std::cout << "Client deleted" << std::endl;}
+	~ClientContext(){std::cout << "Client with tid " << gettid() << " deleted" << std::endl;}
 };
 
 std::mutex mut;
-std::unordered_map<int, ClientContext> contexts;
+std::unordered_map<int, std::shared_ptr<ClientContext>> contexts;
 
 
-uint32_t BBS(ClientContext& context)
+uint32_t BBS(std::shared_ptr<ClientContext>& context)
 {
 	int N = sizeof(uint32_t) * 8;
 	uint32_t result = 0;
-	uint32_t M = context.client_settings.p * context.client_settings.q;
+	uint32_t M = context->client_settings.p * context->client_settings.q;
 	for (int i = 0; i < N; ++i)
 	{
-		result = result | (context.last_x % 2);
+		result = result | (context->last_x % 2);
 		result = result << (i == N - 1? 0: 1);
-		context.last_x = (context.last_x * context.last_x) % M;
+		context->last_x = (context->last_x * context->last_x) % M;
 	}
 	std::cout << "Thread " << gettid() << " has returned a value " << result << std::endl;
 	return result;
@@ -97,8 +100,8 @@ int io_devctl(resmgr_context_t *ctp, io_devctl_t *msg,
 			}
 			else
 			{
-				contexts[client_id].client_settings = *tmp_params;
-				contexts[client_id].last_x = tmp_params->seed;
+				contexts[client_id]->client_settings = *tmp_params;
+				contexts[client_id]->last_x = tmp_params->seed;
 			}
 			nbytes = 0;
 			break;
@@ -128,7 +131,8 @@ int io_open (resmgr_context_t * ctp , io_open_t * msg , RESMGR_HANDLE_T * handle
 	{
 		const std::lock_guard<std::mutex> lock_g(mut);
 		std::cout << "Mutex is owned by thread " << gettid() << std::endl;
-		contexts.emplace(ctp->info.scoid, ClientContext());
+		contexts.emplace(ctp->info.scoid, std::make_shared<ClientContext>());
+		contexts[ctp->info.scoid]->tid = gettid();
 
 		std::cout << "CLIENT:\t" << ctp->info.scoid << "\tCONNECTED" << std::endl;
 	}
